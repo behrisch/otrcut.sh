@@ -20,7 +20,7 @@ CutProg=""		#Zu verwendendes Schneideprogramm
 LocalCutlistName=""	#Name der lokalen Cutlist
 format=""		#Um welches Format handelt es sich? AVI, HQ, mp4
 cutlistWithError=""	#Cutlists die, einen Fehler haben
-delete=no
+moveUncut=no
 continue=0
 aspect=43		#Standard-Seitenverhältnis
 rot="\033[22;31m"	#Rote Schrift
@@ -90,7 +90,7 @@ Optionen:
 
 -l, --local 		Lokale Cutlists verwenden (Cutlists werden im aktuellen Verzeichnis gesucht)
 
---delete		Quellvideo nach Schneidevorgang löschen ACHTUNG: Falls es sich bei der Quelle um ein OtrKey handelt wird dies auch gelöscht!!!
+--moveUncut		Quellvideo nach Schneidevorgang verschieben.
 
 -o, --output [arg]	Ausgabeordner wählen (Standard "./cut")
 
@@ -156,7 +156,7 @@ while [ ! -z "$1" ]; do
 		-a | --avisplit )	UseAvidemux=no ;;
 		-e | --error )	HaltByErrors=yes ;;
 		-d | --decode )	decode=yes ;;
-		--delete )	delete=yes ;;
+		--moveUncut )	moveUncut=yes ;;
 		-l | --local )	UseLocalCutlist=yes ;;
 		-t | --tmp )	tmp=$2
 				shift ;;
@@ -1003,12 +1003,10 @@ else
 fi
 if [ -f "$outputfile" ]; then
 	echo -e "${gruen}$outputfile wurde erstellt${normal}"
-	if [ "$delete" == "yes" ]; then
-		echo "Lösche Quellvideo."
+	if [ "$moveUncut" == "yes" ]; then
+		echo "Verschiebe Quellvideo."
 		if [ $decoded == "yes" ]; then		
-			nice -n 15 rm -rf "$output/$film"
-		else
-			nice -n 15 rm -rf "$film"
+			mv "$output/$film" "$output/uncut"
 		fi
 	fi
 else
@@ -1201,12 +1199,10 @@ fi
 if [ -f "$outputfile" ]; then
 	echo -n -e  ${gruen}$outputfile${normal}
      	echo -e "${gruen} wurde erstellt${normal}"
-	if [ "$delete" == "yes" ]; then
-		echo "Lösche Quellvideo."	
+	if [ "$moveUncut" == "yes" ]; then
+		echo "Verschiebe Quellvideo."	
 		if [ $decoded == "yes" ]; then		
-			nice -n 15 rm -rf "$output/$film"
-		else
-			nice -n 15 rm -rf "$film"
+			mv "$output/$film" "$output/uncut"
 		fi
 	fi
 else
@@ -1289,13 +1285,20 @@ if echo $i | grep -q .otrkey; then
 		fi
 	fi
 	echo "Decodiere Datei --> "
-	nice -n 15 $decoder -e "$email" -p "$password" -q -f -i "$i" -o "$output"
+	$decoder -e "$email" -p "$password" -q -f -i "$i" -o "$output"
+	
+	if [ $? -eq 0 ]
+	then
+		decoded=yes
+	else
+		decoded=no
+	fi
+
 	otrkey=$i
-	decoded=yes
 else
 	decoded=no
 fi
-if [ "$delete" == "yes" ]; then
+if [ "$decoded" == "yes" ]; then
 	echo "Lösche OtrKey"
 	rm -rf "$otrkey"
 fi
