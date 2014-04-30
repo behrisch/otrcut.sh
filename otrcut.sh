@@ -1188,9 +1188,7 @@ if [ -f "$outputfile" ]; then
  		echo -e "${gruen} wurde erstellt${normal}"
 	if [ "$moveUncut" == "yes" ]; then
 		echo "Verschiebe Quellvideo."	
-		if [ $decoded == "yes" ]; then
-			mv "$film" uncut
-		fi
+		mv -v "$film" uncut
 	fi
 else
  		echo -e "${rot}Avidemux muss einen Fehler verursacht haben${normal}"
