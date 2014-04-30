@@ -640,6 +640,9 @@ else
 				if echo $cutlistWithError | grep -q "${ID[$array]}"; then #Wenn Fehler gesetzt ist z.B. EPG-Error oder MissingBeginning
 					echo -ne "${normal}"
 				fi
+
+				echo "Kommentar: ${comment[$array]}" >> $tmp/info.txt
+				echo "Filename: ${filename[$array]}" >> $tmp/info.txt
 			fi
 			
 			let tail++
@@ -986,6 +989,9 @@ else
 fi
 if [ -f "$outputfile" ]; then
 	echo -e "${gruen}$outputfile wurde erstellt${normal}"
+
+	mv $tmp/info.txt "$outputfile.txt"
+
 	if [ "$moveUncut" == "yes" ]; then
 		echo "Verschiebe Quellvideo."
 		mv -v "$film" uncut
@@ -1182,8 +1188,8 @@ if [ -f "$outputfile" ]; then
  		echo -e "${gruen} wurde erstellt${normal}"
 	if [ "$moveUncut" == "yes" ]; then
 		echo "Verschiebe Quellvideo."	
-		if [ $decoded == "yes" ]; then		
-			mv "$output/$film" "$output/uncut"
+		if [ $decoded == "yes" ]; then
+			mv "$film" uncut
 		fi
 	fi
 else
