@@ -29,13 +29,12 @@ normal="\033[0m"	#Normale Schrift
 UseLocalCutlist=no	#Lokale Cutlists verwenden?
 HaltByErrors=no		#Bei Fehlern anhalten?
 toprated=yes		#Die Cutlist mit der besten User-Bewertung benutzen?
-UseAvidemux=yes		#Avidemux verwenden?
 ShowAllCutlists=yes	#Auswahl mehrerer Cutlists anzeigen?
 tmp="/tmp/otrcut"	#Zu verwendender Tmp-Ordner, in diesem Ordner wird dann noch ein Ordner "otrcut" erstellt.
 overwrite=no		#Bereits vorhandene Dateien überschreiben
 output=cut		#Ausgabeordner
 bewertung=no		#Bewertungsfunktion benutzen
-verbose=no		#Ausführliche Ausgabe von avidemux bzw. avisplit/avimerge anzeigen
+verbose=no		#Ausführliche Ausgabe von avidemux
 play=no			#Datei nach dem Schneiden wiedergeben
 warn=no		#Warnung bezüglich der Löschung von $tmp ausgeben
 user=otrcut		#Benutzer der zum Bewerten benutzt wird
@@ -43,7 +42,6 @@ player=mplayer		#Mit diesem Player wird das Video wiedergegeben sofern $play auf
 smart=yes		#Force-Smart für avidemux verwenden
 vidcodec=copy		#Input-Video nur kopieren.
 personal=no		#Persönliche URL von cutlist.at zum Bewerten benutzen
-ad_version=new		#New= Avidemux >=2.5, Old= Avidemux <=2.4
 copy=no			#Wenn $toprated=yes, und keine Cutlist gefunden wird, $film nach $output kopieren
 
 #Diese Variablen werden vom Benutzer gesetzt.
@@ -298,48 +296,20 @@ fi
 #Diese Funktion überprüft ob avidemux installiert ist
 function software ()
 {
-if [ "$UseAvidemux" == "yes" ]; then
-	for s in avidemux2_cli avidemux2_qt4 avidemux2_gtk avidemux2 avidemux; do
-		if [ -z $CutProg ]; then
-			echo -n "Überprüfe ob $s installiert ist --> "
-			if type -t $s >> /dev/null; then
-				echo -e "${gruen}okay${normal}"
-				CutProg="$s"
-			else
-				echo -e "${rot}false${normal}"
-			fi
-		fi
-	done
+for s in avidemux3_cli avidemux3_qt4 avidemux3_qt5 avidemux3_gtk avidemux3 avidemux; do
 	if [ -z $CutProg ]; then
-		echo -e "${rot}Bitte installieren sie avidemux, oder verwenden sie die Optione \"-a\"!${normal}"
-		exit 1
-	fi
-fi
-
-#Hier wird überprüft ob avisplit und avimerge installiert sind
-if [ "$UseAvidemux" == "no" ]; then
-	for p in avisplit avimerge; do
-		echo -n "Überprüfe ob $p installiert ist --> "
-		if type -t $p >> /dev/null; then
+		echo -n "Überprüfe ob $s installiert ist --> "
+		if type -t $s >> /dev/null; then
 			echo -e "${gruen}okay${normal}"
-			CutProg="avisplit"
+			CutProg="$s"
 		else
 			echo -e "${rot}false${normal}"
-			echo -e "${gelb}Installieren Sie transcode!${normal}"
-			exit 1
 		fi
-	done
-fi
-
-#Hier wird überprüft ob date zum umrechnen der Zeit benutzt werden kann
-echo -n "Überprüfe welche Methode zum Umrechnen der Zeit benutzt wird --> "
-date_var=$(date -u -d @120 +%T)
-if [ "$date_var" == "00:02:00" ]; then
-	echo -e "${blau}date${normal}"
-	date_okay=yes
-else
-	echo -e "${gelb}intern${normal}"
-	date_okay=no
+	fi
+done
+if [ -z $CutProg ]; then
+	echo -e "${rot}Bitte installieren sie avidemux!${normal}"
+	exit 1
 fi
 
 #Hier wird überprüft ob der richtige Pfad zum Decoder angegeben wurde
@@ -351,14 +321,14 @@ if [ "$decoded" == "yes" ]; then
 		echo -e "${rot}false${normal}"
 		exit 1
 	fi
-if [ "$email" == "" ]; then
-	echo -e "${rot}EMail-Adresse wurde nicht gesetzt.${normal}"
-	exit 1
-fi
-if [ "$password" == "" ]; then
-	echo -e "${rot}Passwort wurde nicht gesetzt.${normal}"
-	exit 1
-fi
+	if [ "$email" == "" ]; then
+		echo -e "${rot}EMail-Adresse wurde nicht gesetzt.${normal}"
+		exit 1
+	fi
+	if [ "$password" == "" ]; then
+		echo -e "${rot}Passwort wurde nicht gesetzt.${normal}"
+		exit 1
+	fi
 fi
 }
 
@@ -368,17 +338,15 @@ function name ()
 film=$i	#Der komplette Filmname und gegebenfalls der Pfad
 film_ohne_anfang=$i
 #Für Avidemux <=2.5 muss der komplette Pfad angegeben werden
-if [ "$ad_version" == "new" ]; then
-	film_var=${film#/} 
-	output_var=${output#/}
-	if [ "$film" == "$film_var" ]; then
-		film_new_ad="$PWD/$film"
-	else
-		film_new_ad="$film"
-	fi
-	if [ "$output" == "$output_var" ]; then
-		output="$PWD/$output"
-	fi
+film_var=${film#/} 
+output_var=${output#/}
+if [ "$film" == "$film_var" ]; then
+	film_new_ad="$PWD/$film"
+else
+	film_new_ad="$film"
+fi
+if [ "$output" == "$output_var" ]; then
+	output="$PWD/$output"
 fi
 if [ "$decoded" == "yes" ]; then
 	film_ohne_anfang="${film_ohne_anfang%%.otrkey}"
@@ -835,7 +803,7 @@ fi
 echo $fps
 }
 
-#Hier wird nun, fals avidemux gewählt wurde, avidemux gestartet
+#Hier wird avidemux gestartet
 function demux ()
 {
 if [ "$decoded" == "yes" ]; then
@@ -918,14 +886,12 @@ EOF
 
 echo "Übergebe die Cuts nun an avidemux"
 
-#if [ "$aspect" == "43" ]; then
 if [ "$smart" == "yes" ]; then
 	if [ "$verbose" == "yes" ]; then
 		nice -n 15 $CutProg --nogui --force-smart --run "$tmp/avidemux.py" --quit
 	else
 		nice -n 15 $CutProg --nogui --force-smart --run "$tmp/avidemux.py" --quit >> /dev/null
 	fi
-#elif [ "$aspect" == "169" ]; then
 elif [ "$smart" == "no" ]; then
 	if [ "$verbose" == "yes" ]; then
 		nice -n 15 $CutProg --nogui --run "$tmp/avidemux.py" --quit
@@ -942,12 +908,12 @@ if [ -f "$outputfile" ]; then
 		mv -v "$film" uncut
 	fi
 else
- 		echo -e "${rot}Avidemux muss einen Fehler verursacht haben${normal}"
- 		if [ $HaltByErrors == "yes" ]; then
-	 	  exit 1
- 		else
-	 	  continue=1
- 		fi
+	echo -e "${rot}Avidemux muss einen Fehler verursacht haben${normal}"
+	if [ $HaltByErrors == "yes" ]; then
+		exit 1
+	else
+		continue=1
+	fi
 fi
 }
 
@@ -1067,27 +1033,26 @@ datei
 #		echo "Verwende http://cutlist.mbod.net als Server"
 #fi
 software
-	for i in "${input[@]}"; do
-			test
-		del_tmp
-		decode
-			name
-		if [ "$UseLocalCutlist" == "yes" ]; then
-	 		local
-		fi
-	  
-		while true; do
+for i in "${input[@]}"; do
+	test
+	del_tmp
+	decode
+	name
+	if [ "$UseLocalCutlist" == "yes" ]; then
+		local
+	fi
+	while true; do
 		if [ "$UseLocalCutlist" == "no" ] || [ "$vorhanden" == "no" ]; then
-	 			load
-			fi
-			if [ "$continue" == "0" ]; then
-			 	format
+			load
+		fi
+		if [ "$continue" == "0" ]; then
+			format
 		fi
 		#if [ "$continue" == "0" ]; then
 			# 	aspectratio
 		#fi
-	  if [ "$continue" == "0" ]; then
-			 	fps
+		if [ "$continue" == "0" ]; then
+			fps
 		fi
 		if [ "$continue" == "0" ]; then
 			cutlist_error
@@ -1107,59 +1072,37 @@ software
 		if [ "$error_found" == "1" ] && [ "$toprated" == "yes" ]; then
 			break
 		fi
-		done
-		if [ "$CutProg" = "avisplit" ] && [ $continue == "0" ]; then
-	 		if [ "$date_okay" = "yes" ]; then
-		 		time1
-	 		elif [ "$date_okay" = "no" ]; then
-		 		time2
-	 		fi
-	 		if [ "$overwrite" == "no" ]; then
-		 		if [ ! -f "$output/$film_ohne_ende-cut.avi" ]; then
-		 			split
-		 		else
-		 			echo -e "${gelb}Die Ausgabedatei existiert bereits!${normal}"
-		 			if [ $HaltByErrors == "yes" ]; then
-			 			exit 1
-		 			else
-			 			continue=1
-		 			fi
-		 		fi
-	 		fi
-	 		if [ "$overwrite" == "yes" ]; then
-		 		split
-	 		fi
-		fi
-		if [ "$CutProg" = "avidemux" ] || [ "$CutProg" = "avidemux2" ] || [ "$CutProg" = "avidemux2_cli" ] || [ "$CutProg" = "avidemux2_qt4" ] || [ "$CutProg" = "avidemux2_gtk" ] && [ $continue == "0" ]; then
-	 		if [ "$overwrite" == "no" ]; then
-		 		if [ ! -f "$output/$film_ohne_ende-cut.avi" ]; then
-		 			demux
-		 		else
-		 			echo -e "${gelb}Die Ausgabedatei existiert bereits!${normal}"
-		 			if [ $HaltByErrors == "yes" ]; then
-			 			exit 1
-		 			else
-			 			continue=1
-		 			fi
-		 		fi
-	 		fi
-	 		if [ "$overwrite" == "yes" ]; then
-		 		demux
-	 		fi
-		fi
-		if [ "$UseLocalCutlist" == "no" ] && [ "$bewertung" == "yes" ] && [ ! "$continue" == "1" ]; then
-			if [ "$play" == "no" ]; then
-				bewertung
-			elif [ "$play" == "yes" ]; then
-				echo "Starte nun den gewählten Videoplayer"
-				sleep 1
-		 		$player "$outputfile"
-		 		bewertung
+	done
+	if [ $continue == "0" ]; then
+		if [ "$overwrite" == "no" ]; then
+			if [ ! -f "$output/$film_ohne_ende-cut.avi" ]; then
+				demux
+			else
+				echo -e "${gelb}Die Ausgabedatei existiert bereits!${normal}"
+				if [ $HaltByErrors == "yes" ]; then
+					exit 1
+				else
+					continue=1
+				fi
 			fi
 		fi
+		if [ "$overwrite" == "yes" ]; then
+			demux
+		fi
+	fi
+	if [ "$UseLocalCutlist" == "no" ] && [ "$bewertung" == "yes" ] && [ ! "$continue" == "1" ]; then
+		if [ "$play" == "no" ]; then
+			bewertung
+		elif [ "$play" == "yes" ]; then
+			echo "Starte nun den gewählten Videoplayer"
+			sleep 1
+			$player "$outputfile"
+			bewertung
+		fi
+	fi
 	if [ "$decoded" == "yes" ]; then
 		rm -rf "$output/$film"
 	fi
-		del_tmp
-		continue=0
+	del_tmp
+	continue=0
 done
