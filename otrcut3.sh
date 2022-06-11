@@ -11,10 +11,9 @@
 #Hier werden verschiedene Variablen definiert.
 version=20220601	#Die Version von OtrCut, Format: yyyymmdd, yyyy=Jahr mm=Monat dd=Tag
 LocalCutlistOkay=no	#Ist die lokale Cutlist vorhanden?
-input=()		#Eingabedatei/en
-CutProg=""		#Zu verwendendes Schneideprogramm
+input=()			#Eingabedatei/en
+CutProg=""			#Zu verwendendes Schneideprogramm
 LocalCutlistName=""	#Name der lokalen Cutlist
-format=""		#Um welches Format handelt es sich? AVI, HQ, mp4
 cutlistWithError=""	#Cutlists die, einen Fehler haben
 moveUncut=no
 continue=0
@@ -37,21 +36,17 @@ bewertung=no		#Bewertungsfunktion benutzen
 verbose=no		#Ausführliche Ausgabe von avidemux
 play=no			#Datei nach dem Schneiden wiedergeben
 warn=no		#Warnung bezüglich der Löschung von $tmp ausgeben
-user=otrcut		#Benutzer der zum Bewerten benutzt wird
 player=mplayer		#Mit diesem Player wird das Video wiedergegeben sofern $play auf yes steht
 smart=yes		#Force-Smart für avidemux verwenden
 vidcodec=copy		#Input-Video nur kopieren.
-personal=no		#Persönliche URL von cutlist.at zum Bewerten benutzen
+container=mkv
 copy=no			#Wenn $toprated=yes, und keine Cutlist gefunden wird, $film nach $output kopieren
-
-#Diese Variablen werden vom Benutzer gesetzt.
-#Sie sind für die Verwendung des Decoders gedacht.
+decode=no
 email="" #Die EMail-Adresse mit der Sie bei OTR registriert sind
 password="" #Das Passwort mit dem Sie sich bei OTR einloggen
 decoder="otrdecoder" #Pfad zum decoder. Z.B. /home/benutzer/bin/otrdecoder
-
-#Diese Variablen werden vom Benutzer gesetzt.
-personalurl=""	#Die persönliche URL von cutlist.at
+server="http://cutlist.at/" #cutlist server
+user=otrcut		#Benutzer der zum Bewerten benutzt wird
 
 if [ -f ~/.otrcut ]; then
 	source ~/.otrcut
@@ -65,9 +60,8 @@ function help ()
 cat <<HELP
 OtrCut Version: $version
 
-Dieses Script schneidet OTR-Dateien anhand der Cutlist von http://cutlist.at.
-Es können entweder die Tools avidemux oder avisplit/avimerge benutzt werden.
-Avidemux kann im Gegensatz zu avisplit auch zwischen Keyframes schneiden.
+Dieses Script schneidet OTR-Dateien anhand der Cutlist von http://cutlist.at
+mit Hilfe von avidemux3.
 Hier die Anwendung:
 
 $0 [optionen] -i film.mpg.avi
@@ -96,11 +90,9 @@ Optionen:
 
 --toprated		Verwendet die best bewertetste Cutlist
 
--v, --verbose		Ausführliche Ausgabe von avidemux bzw. avimerge/avisplit aktivieren
+-v, --verbose		Ausführliche Ausgabe von avidemux aktivieren
 
 --nosmart		So wird das --force-smart-Argument für avidemux abgeschaltet.
-
---personal		Die persönliche ID von cutlist.at zum Bewerten benutzen
 
 -c, --copy		Wenn $toprated=yes, und keine Cutlist gefunden wird, $film nach $output kopieren
 
@@ -110,7 +102,7 @@ Optionen:
 
 Author: Daniel Siegmanski
 Homepage: http://www.siggimania4u.de
-Cutlists: http://www.cutlist.de, http://www.cutlist.at
+Cutlists: http://www.cutlist.at
 
 Danke an MKay für das Aspect-Ratio-Script
 FPS-Script/HD-Funktion: Florian Knodt <www.adlerweb.info>
@@ -138,7 +130,6 @@ while [ ! -z "$1" ]; do
 		-b | --bewerten)	bewertung=yes ;;
 		-w | --warn )	warn=no ;;
 		-c | --copy )	copy=yes ;;
-		--personal )	personal=yes ;;
 		--toprated )	toprated=yes ;;
 		--nosmart )	smart=no ;;
 		--vcodec )	vidcodec="$2"
@@ -165,21 +156,6 @@ if [ "$warn" == "yes" ]; then
 	echo ""
 	echo ""
 fi
-}
-
-#Diese Funktion gibt einen Hinweis zur Dateinamensübergabe aus
-function datei ()
-{
-echo -e "${gelb}"
-echo "ACHTUNG!!!"
-echo "Die Eingabedateien müssen entweder ohne führende Verzeichnise "
-echo "(z.B. datei.avi, nur wenn Datei im aktuellen Verzeichnis!) oder"
-echo "mit dem KOMPLETTEN Pfad (z.B. /home/user/datei.avi) angegeben werden!"
-echo -e "${normal}"
-
-sleep 2
-echo ""
-echo ""
 }
 
 #Diese Funktion überprüft verschiedene Einstellungen
@@ -224,7 +200,7 @@ else
 		echo -e "${rot}Sie haben keine Schreibrechte in $output.${normal}"
 		exit 1
 	else
-		echo -e "${gelb}Das Verzeichnis $output wurde nicht gefunden, soll er erstellt werden? [y|n]${normal}"
+		echo -e "${gelb}Das Verzeichnis $output wurde nicht gefunden, soll es erstellt werden? [y|n]${normal}"
 		read OUTPUT
 		while [ "$OUTPUT" == "" ] || [ ! "$OUTPUT" == "y" ] && [ ! "$OUTPUT" == "n" ]; do #Bei falscher Eingabe
 			echo -e "${gelb}Falsche Eingabe, bitte nochmal:${normal}"
@@ -313,7 +289,7 @@ if [ -z $CutProg ]; then
 fi
 
 #Hier wird überprüft ob der richtige Pfad zum Decoder angegeben wurde
-if [ "$decoded" == "yes" ]; then
+if [ "$decode" == "yes" ]; then
 	echo -n "Überprüfe ob der Decoder-Pfad richtig gesetzt wurde --> "
 	if $decoder -v >> /dev/null; then
 		echo -e "${gruen}okay${normal}"
@@ -329,69 +305,6 @@ if [ "$decoded" == "yes" ]; then
 		echo -e "${rot}Passwort wurde nicht gesetzt.${normal}"
 		exit 1
 	fi
-fi
-}
-
-#Diese Funktion definiert den Cutlist- und Dateinamen und üperprüft um welches Dateiformat es sich handelt
-function name ()
-{
-film=$i	#Der komplette Filmname und gegebenfalls der Pfad
-film_ohne_anfang=$i
-#Für Avidemux <=2.5 muss der komplette Pfad angegeben werden
-film_var=${film#/} 
-output_var=${output#/}
-if [ "$film" == "$film_var" ]; then
-	film_new_ad="$PWD/$film"
-else
-	film_new_ad="$film"
-fi
-if [ "$output" == "$output_var" ]; then
-	output="$PWD/$output"
-fi
-if [ "$decoded" == "yes" ]; then
-	film_ohne_anfang="${film_ohne_anfang%%.otrkey}"
-	film_ohne_anfang="${film_ohne_anfang##*/}"
-	film="$film_ohne_anfang"
-fi
-CUTLIST=`basename "$film"`	#Filmname ohne Pfad
-echo -n "Überprüfe um welches Aufnahmeformat es sich handelt --> "
-if echo "$film_ohne_anfang" | grep -q ".HQ."; then	#Wenn es sich um eine "HQ" Aufnahme handelt
-	film_ohne_ende=${film%%.mpg.HQ.avi}	#Filmname ohne Dateiendung
-	CUTLIST=${CUTLIST/.avi/}.cutlist	#Der lokale Cutlistname
-	format=hq
-	echo -e "${blau}HQ${normal}"
-elif echo "$film_ohne_anfang" | grep -q ".mp4"; then	#Wenn es sich um eine "mp4" Aufnahme handelt
-	film_ohne_ende=${film%%.mpg.mp4}	#Filmname ohne Dateiendung
-	format=mp4
-	CUTLIST=${CUTLIST/.mp4/}.cutlist	#Der lokale Cutlistname
-	echo -e "${blau}mp4${normal}"
-else
-	film_ohne_ende=${film%%.mpg.avi}	#Filmename ohne Dateiendung
-	format=avi
-	CUTLIST=${CUTLIST/.avi/}.cutlist	#Der lokale Cutlistname
-	echo -e "${blau}avi${normal}"
-fi
-
-if echo "$film" | grep / >> /dev/null; then	#Wenn der Dateiname einen Pfad enthält
-	film_ohne_anfang=${film##*/}	#Filmname ohne Pfad
-	if echo "$film_ohne_anfang" | grep -q ".HQ."; then	#Wenn es sich um eine "HQ" Aufnahme handelt
-		film_ohne_ende=${film_ohne_anfang%%.mpg.HQ.avi}
-		format=hq
-	elif echo "$film_ohne_anfang" | grep -q ".mp4"; then	#Wenn es sich um eine "mp4" Aufnahme handelt
-		film_ohne_ende=${film_ohne_anfang%%.mpg.mp4}
-		format=mp4
-	else
-		film_ohne_ende=${film_ohne_anfang%%.mpg.avi}
-		format=avi
-	fi
-fi
-
-if echo "$film_ohne_anfang" | grep -q ".HQ."; then
-   outputfile="$output/$film_ohne_ende.HQ-cut.avi"
-elif echo "$film_ohne_anfang" | grep -q ".mp4"; then
-   outputfile="$output/$film_ohne_ende-cut.mp4"
-else
-   outputfile="$output/$film_ohne_ende-cut.avi"
 fi
 }
 
@@ -479,23 +392,9 @@ else
 fi
 }
 
-if [ "$personal" == "yes" ]; then
-	server=$personalurl
-else
-	server="http://cutlist.at/"
-fi
-
-#echo $server
-
 echo -e "Bearbeite folgende Datei: ${blau}$film${normal}"
-sleep 1
-if [ "$decoded" == "yes" ]; then
-	filesize=$(ls -l "$output/$film" | awk '{ print $5 }')
-else
-	filesize=$(ls -l "$film" | awk '{ print $5 }')
-fi
-#echo $filesize
-echo -n "Führe Suchanfrage bei \"cutlist.at\" durch ---> "
+filesize=$(ls -l "$film" | awk '{ print $5 }')
+echo -n "Führe Suchanfrage bei $server durch ---> "
 wget -q -O "$tmp/search.xml" "${server}getxml.php?version=0.9.8.0&ofsb=$filesize" &&
 if grep -q '<id>' "$tmp/search.xml"; then
 	echo -e "${gruen}okay${normal}"
@@ -510,7 +409,7 @@ fi
 
 #Hier wird die Suchanfrage überprüft
 if [ "$continue" == "1" ]; then
-	echo -e "${rot}Es wurden keine Cutlists auf cutlist.at gefunden.${normal}"
+	echo -e "${rot}Es wurden keine Cutlists auf $server gefunden.${normal}"
 	if [ "$HaltByErrors" == "yes" ]; then
 		exit 1
 	fi
@@ -705,7 +604,7 @@ else
 		continue=1
 	fi
 fi
- }
+}
 
 #Hier wir die Cutlist überprüft, auf z.B. EPGErrors, MissingEnding, MissingVideo, ...
 function cutlist_error ()
@@ -794,7 +693,7 @@ fi
 #Florian Knodt <www.adlerweb.info>
 function fps ()
 {
-echo -n "Ermittles Bildrate --> "
+echo -n "Ermittle Bildrate --> "
 
 fps=50
 if file "$film" 2>&1 | grep "25.00 fps" > /dev/null ; then
@@ -806,17 +705,12 @@ echo $fps
 #Hier wird avidemux gestartet
 function demux ()
 {
-if [ "$decoded" == "yes" ]; then
-	film_path="$output/$film"
-else
-	film_path="$film_new_ad"
-fi
 cat > "$tmp/avidemux.py" << EOF
 #PY  <- Needed to identify #
 
 adm = Avidemux()
-if not adm.loadVideo("$film_path"):
-    raise("Cannot load $film_path")
+if not adm.loadVideo("$film"):
+    raise("Cannot load $film")
 adm.clearSegments()
 EOF
 
@@ -852,14 +746,6 @@ elif [ "$format" = "frames" ]; then
 	done
 fi
 
-if echo "$film_ohne_anfang" | grep -q ".HQ."; then
-	outputfile="$output/$film_ohne_ende.HQ-cut.mkv"
-elif echo "$film_ohne_anfang" | grep -q ".mp4"; then
-	outputfile="$output/$film_ohne_ende-cut.mp4"
-else
-	outputfile="$output/$film_ohne_ende-cut.mkv"
-fi
-
 fpsjs=$(($fps*1000))
 cat >> "$tmp/avidemux.py" << EOF
 
@@ -878,7 +764,7 @@ if adm.audioTotalTracksCount() <= 0:
 adm.audioAddTrack(0)
 adm.audioCodec(0, "copy")
 #adm.setContainer("AVI")
-adm.setContainer("MKV", "forceAspectRatio=True", "displayWidth=1280", "displayAspectRatio=2", "addColourInfo=False", "colMatrixCoeff=2", "colRange=0", "colTransfer=2", "colPrimaries=2")
+adm.setContainer("$container", "forceAspectRatio=True", "displayWidth=1280", "displayAspectRatio=2", "addColourInfo=False", "colMatrixCoeff=2", "colRange=0", "colTransfer=2", "colPrimaries=2")
 adm.save("$outputfile")
 
 # End of script
@@ -944,11 +830,7 @@ if [ "$note" == "" ]; then
 	echo "Für diese Cutlist wird keine Bewertung abgegeben."
 else
 	echo -n "Übermittle Bewertung für $CUTLIST -->"
-	if [ "$personal" == "yes" ]; then
-		wget -q -O "$tmp/rate.php" "${personalurl}rate.php?rate=$id&rating=$note&userid=$cutlistuser&version=0.9.8.7"
-	else
-		wget -q -O "$tmp/rate.php" "http://cutlist.at/rate.php?rate=$id&rating=$note&userid=$user&version=0.9.8.7"
-	fi
+	wget -q -O "$tmp/rate.php" "${server}rate.php?rate=$id&rating=$note&userid=$user&version=0.9.8.7"
 	sleep 1
 	if [ -f "$tmp/rate.php" ]; then
 		if cat "$tmp/rate.php" | grep -q "Cutlist nicht von hier. Bewertung abgelehnt."; then
@@ -975,34 +857,15 @@ fi
 function decode ()
 {
 if echo $i | grep -q .otrkey; then
-	if [ ! "$email_checked" == "yes" ]; then
-		if [ "$email" == "" ]; then
-			echo -e "${rot}Kann nicht dekodieren da keine EMail-Adresse angegeben wurde!${normal}"
-			exit 1
-		elif [ "$password" == "" ]; then
-			echo -e "${rot}Kann nicht dekodieren da kein Passwort angegeben wurde!${normal}"#
-			exit 1
-		else
-			email_checked=yes
-		fi
-	fi
-	echo "Decodiere Datei --> "
-	$decoder -e "$email" -p "$password" -q -f -i "$i" -o "$output"
-	
-	if [ $? -eq 0 ]
-	then
-		decoded=yes
+	echo "Dekodiere Datei --> "
+	if $decoder -e "$email" -p "$password" -q -f -i "$i" -o "$output"; then
+		film=$output/`basename $i .otrkey`
 	else
-		decoded=no
+		echo -e "${rot}Fehler beim Dekodieren von $i${normal}"
+		exit 1
 	fi
-
-	otrkey=$i
 else
-	decoded=no
-fi
-if [ "$decoded" == "yes" ]; then
-	echo "Lösche OtrKey"
-	rm -rf "$otrkey"
+	film=$i
 fi
 }
 
@@ -1019,25 +882,17 @@ echo "Lösche temporäre Dateien"
 }
 
 
-if [ "$warn" == "yes" ]; then
-	warnung
-fi
-datei
-#del_tmp
-
-#if [ "$server" == "0" ]; then
-#		echo "Verwende  http://cutlist.de als Server."
-#elif [ "$server" == "1" ]; then
-#		echo "Verwende http://cutlist.at als Server"
-#elif [ "$server" == "2" ]; then
-#		echo "Verwende http://cutlist.mbod.net als Server"
-#fi
 software
+warnung
 for i in "${input[@]}"; do
 	test
 	del_tmp
 	decode
-	name
+	case $film in
+		*.avi) outputfile="$output/`basename $film .avi`-cut.$container";;
+		*.mp4) outputfile="$output/`basename $film .mp4`-cut.$container";;
+	esac
+
 	if [ "$UseLocalCutlist" == "yes" ]; then
 		local
 	fi
@@ -1075,7 +930,7 @@ for i in "${input[@]}"; do
 	done
 	if [ $continue == "0" ]; then
 		if [ "$overwrite" == "no" ]; then
-			if [ ! -f "$output/$film_ohne_ende-cut.avi" ]; then
+			if [ ! -f "$outputfile" ]; then
 				demux
 			else
 				echo -e "${gelb}Die Ausgabedatei existiert bereits!${normal}"
@@ -1099,9 +954,6 @@ for i in "${input[@]}"; do
 			$player "$outputfile"
 			bewertung
 		fi
-	fi
-	if [ "$decoded" == "yes" ]; then
-		rm -rf "$output/$film"
 	fi
 	del_tmp
 	continue=0
